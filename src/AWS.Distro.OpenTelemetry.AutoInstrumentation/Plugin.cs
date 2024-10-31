@@ -36,6 +36,7 @@ public class Plugin
     private static readonly ILoggerFactory Factory = LoggerFactory.Create(builder => builder.AddConsole());
     private static readonly ILogger Logger = Factory.CreateLogger<Plugin>();
     private static readonly string ApplicationSignalsExporterEndpointConfig = "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT";
+    private static readonly string ApplicationSignalsRuntimeEnabledConfig = "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED";
     private static readonly string MetricExportIntervalConfig = "OTEL_METRIC_EXPORT_INTERVAL";
     private static readonly int DefaultMetricExportInterval = 60000;
     private static readonly string DefaultProtocolEnvVarName = "OTEL_EXPORTER_OTLP_PROTOCOL";
@@ -172,6 +173,12 @@ public class Plugin
         builder.AddAWSInstrumentation();
         return builder;
     }
+    
+    public MeterProviderBuilder BeforeConfigureMeterProvider(MeterProviderBuilder builder)
+    {
+        
+        return builder;
+    }
 
     /// <summary>
     /// To configure tracing SDK after Auto Instrumentation configured SDK
@@ -215,6 +222,18 @@ public class Plugin
         return builder;
     }
 
+    public MeterProviderBuilder AfterConfigureMeterProvider(MeterProviderBuilder builder)
+    {
+        if (this.IsApplicationSignalsRuntimeEnabled())
+        {
+            builder.AddView(instrument => instrument.Meter.Name == "OpenTelemetry.Instrumentation.Runtime"
+                ? null
+                : MetricStreamConfiguration.Drop);
+        }
+
+        return builder;
+    }
+    
     /// <summary>
     /// To configure Resource with resource detectors and <see cref="DistroAttributes"/>
     /// Check <see cref="ResourceBuilderCustomizer"/> for more information.
@@ -359,6 +378,12 @@ public class Plugin
     private bool IsApplicationSignalsEnabled()
     {
         return System.Environment.GetEnvironmentVariable(ApplicationSignalsEnabledConfig) == "true";
+    }
+
+    private bool IsApplicationSignalsRuntimeEnabled()
+    {
+        return this.IsApplicationSignalsEnabled() &&
+            System.Environment.GetEnvironmentVariable(ApplicationSignalsRuntimeEnabledConfig) == "true";
     }
 
     private ResourceBuilder ResourceBuilderCustomizer(ResourceBuilder builder)
